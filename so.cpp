@@ -6,6 +6,8 @@
 #include <chrono>
 #include <queue>
 #include <algorithm>
+#include <direct.h>
+#include <cstring>
 
 using namespace std;
 
@@ -99,9 +101,7 @@ ResultadoMetodo ejecutarFIFO(vector<Actividad> lista, ofstream& archivoOut) {
     return {"FIFO", prom_T, prom_E, prom_I, duracion};
 }
 
-// ---------------------------------------------------------
-// ALGORITMO LIFO (Basado estrictamente en tu diagrama LIFO)
-// ---------------------------------------------------------
+// Algoritmo LIFO
 ResultadoMetodo ejecutarLIFO(vector<Actividad> lista, ofstream& archivoOut) {
     auto inicio = chrono::high_resolution_clock::now();
     int N = lista.size();
@@ -181,9 +181,7 @@ ResultadoMetodo ejecutarLIFO(vector<Actividad> lista, ofstream& archivoOut) {
     return {"LIFO", prom_T, prom_E, prom_I, duracion};
 }
 
-// ---------------------------------------------------------------
-// ALGORITMO ROUND ROBIN (Basado estrictamente en tu diagrama RR)
-// ---------------------------------------------------------------
+// Round Robin 
 ResultadoMetodo ejecutarRoundRobin(vector<Actividad> lista, double Q, ofstream& archivoOut) {
     auto inicio = chrono::high_resolution_clock::now();
     int N = lista.size();
@@ -272,4 +270,152 @@ ResultadoMetodo ejecutarRoundRobin(vector<Actividad> lista, double Q, ofstream& 
                << "Tiempo de ejecucion: " << duracion << " us\n\n";
 
     return {"Round Robin", prom_T, prom_E, prom_I, duracion};
+}
+
+// Comparativa de metodo mas eficiente 
+void compararResultados(const vector<ResultadoMetodo>& resultados, ofstream& archivoOut) {
+    cout << "\n=========================================================\n";
+    cout << "               COMPARATIVA DE ALGORITMOS                \n";
+    cout << "=========================================================\n";
+    cout << left << setw(15) << "Metodo" 
+         << setw(12) << "Prom T" 
+         << setw(12) << "Prom E" 
+         << setw(12) << "Prom I" 
+         << setw(15) << "Tiempo (us)" << "\n";
+
+    archivoOut << "=========================================================\n";
+    archivoOut << "               COMPARATIVA DE ALGORITMOS                \n";
+    archivoOut << "=========================================================\n";
+    archivoOut << left << setw(15) << "Metodo" 
+               << setw(12) << "Prom T" 
+               << setw(12) << "Prom E" 
+               << setw(12) << "Prom I" 
+               << setw(15) << "Tiempo (us)" << "\n";
+
+    int mejor_idx = 0;
+    for (size_t i = 0; i < resultados.size(); ++i) {
+        cout << left << setw(15) << resultados[i].nombre
+             << setw(12) << resultados[i].prom_T
+             << setw(12) << resultados[i].prom_E
+             << setw(12) << resultados[i].prom_I
+             << setw(15) << resultados[i].duracion_us << "\n";
+
+        archivoOut << left << setw(15) << resultados[i].nombre
+                   << setw(12) << resultados[i].prom_T
+                   << setw(12) << resultados[i].prom_E
+                   << setw(12) << resultados[i].prom_I
+                   << setw(15) << resultados[i].duracion_us << "\n";
+
+        // Criterio de selección: Menor tiempo de espera promedio (Prom E)
+        if (resultados[i].prom_E < resultados[mejor_idx].prom_E) {
+            mejor_idx = i;
+        }
+    }
+
+    string conclusion = "\nEL MEJOR METODO ES: " + resultados[mejor_idx].nombre +
+                        " (Basado en el menor tiempo de espera promedio Prom E = " + 
+                        to_string(resultados[mejor_idx].prom_E) + ")\n";
+
+    cout << conclusion;
+    archivoOut << conclusion;
+}
+
+int main(int argc, char* argv[]) {
+    string archivoEntrada;
+    double Q = 4; // Quantum por defecto = 4
+
+    auto fileExists = [&](const string &path) {
+        ifstream f(path);
+        return f.is_open();
+    };
+
+    auto joinPath = [&](const string &dir, const string &file) {
+        if (dir.empty()) return file;
+        string d = dir;
+        char sep = '\\';
+        if (d.back() == '\\' || d.back() == '/') return d + file;
+        return d + sep + file;
+    };
+
+    auto parentPath = [&](string path) {
+        // Normalize separators
+        for (char &c : path) if (c == '/') c = '\\';
+        while (!path.empty() && (path.back() == '\\' || path.back() == '/')) path.pop_back();
+        size_t pos = path.find_last_of('\\');
+        if (pos == string::npos) return string("");
+        return path.substr(0, pos);
+    };
+
+    auto getCurrentDir = [&]() {
+        char buf[1024];
+        if (_getcwd(buf, sizeof(buf))) return string(buf);
+        return string("");
+    };
+
+    // Si se pasa argumento, usarlo directamente
+    if (argc > 1) {
+        archivoEntrada = argv[1];
+    } else {
+        string target = "Data.txt";
+        string cur = getCurrentDir();
+        string p = joinPath(cur, target);
+        if (fileExists(p)) {
+            archivoEntrada = p;
+        } else {
+            // Intentar en el directorio del ejecutable
+            string exe0(argv[0]);
+            string exeDir;
+            if (exe0.find('\\') != string::npos || exe0.find('/') != string::npos) exeDir = parentPath(exe0); else exeDir = cur;
+            p = joinPath(exeDir, target);
+            if (fileExists(p)) {
+                archivoEntrada = p;
+            } else {
+                // Buscar en padres del directorio actual (hasta 10 niveles)
+                string dir = cur;
+                bool encontrado = false;
+                for (int i = 0; i < 10 && !dir.empty(); ++i) {
+                    p = joinPath(dir, target);
+                    if (fileExists(p)) { archivoEntrada = p; encontrado = true; break; }
+                    string parent = parentPath(dir);
+                    if (parent.empty() || parent == dir) break;
+                    dir = parent;
+                }
+
+                if (!encontrado) {
+                    cout << "No se encontro 'Data.txt'. Ingrese el nombre o ruta del archivo: ";
+                    cin >> archivoEntrada;
+                }
+            }
+        }
+    }
+
+    vector<Actividad> actividades = cargarActividades(archivoEntrada);
+
+    if (actividades.empty()) {
+        cout << "No se pudieron cargar actividades. Ingrese el nombre del archivo manual: ";
+        cin >> archivoEntrada;
+        actividades = cargarActividades(archivoEntrada);
+        if (actividades.empty()) return 1;
+    }
+
+    cout << "Ingrese el valor del Quantum (Q) [Default 4]: ";
+    if (!(cin >> Q)) Q = 4;
+
+    ofstream archivoOut("resultados.txt");
+    if (!archivoOut.is_open()) {
+        cerr << "Error al crear el archivo resultados.txt\n";
+        return 1;
+    }
+
+    vector<ResultadoMetodo> resultados;
+    resultados.push_back(ejecutarFIFO(actividades, archivoOut));
+    resultados.push_back(ejecutarLIFO(actividades, archivoOut));
+    resultados.push_back(ejecutarRoundRobin(actividades, Q, archivoOut));
+
+    compararResultados(resultados, archivoOut);
+
+    archivoOut.close();
+    cout << "\nLos resultados se han guardado exitosamente en 'resultados.txt'.\n";
+
+    return 0;
 }
